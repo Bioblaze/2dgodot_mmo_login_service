@@ -172,8 +172,8 @@ func removeClient(clientToRemove *Client) {
 // Handler for Discord OAuth login
 func handleDiscordOAuth(w http.ResponseWriter, r *http.Request) {
 	// Get the required environment variables
-	clientId := os.Getenv("CLIENT_ID")
-	redirectUri := os.Getenv("REDIRECT_URI")
+	clientId := os.Getenv("DISCORD_CLIENT_ID")
+	redirectUri := os.Getenv("DISCORD_REDIRECT_URI")
 	// Get the CID from the route variable
 	vars := mux.Vars(r)
 	cid := vars["cid"]
@@ -257,9 +257,9 @@ func getClientByState(state string) *Client {
 // Exchange the authorization code for an access token
 func exchangeCodeForToken(code string) (string, error) {
 	// Get the required environment variables
-	clientId := os.Getenv("CLIENT_ID")
-	clientSecret := os.Getenv("CLIENT_SECRET")
-	redirectUri := os.Getenv("REDIRECT_URI")
+	clientId := os.Getenv("DISCORD_CLIENT_ID")
+	clientSecret := os.Getenv("DISCORD_CLIENT_SECRET")
+	redirectUri := os.Getenv("DISCORD_REDIRECT_URI")
 	data := strings.NewReader(fmt.Sprintf("client_id=%s&client_secret=%s&grant_type=authorization_code&code=%s&redirect_uri=%s", clientId, clientSecret, code, redirectUri))
 
 	req, err := http.NewRequest("POST", "https://discord.com/api/oauth2/token", data)
