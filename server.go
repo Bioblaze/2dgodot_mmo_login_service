@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -95,6 +96,7 @@ func main() {
 
 	router.HandleFunc("/health", handleHealth)
 
+	logrus.Info("Starting Server")
 	err := http.ListenAndServe(":8080", router)
 	if err != nil {
 		logrus.Error("Error starting server:", err)
@@ -230,6 +232,7 @@ func handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	// Send the JWT to the client over the WebSocket
 	payload := Payload{
 		Action: "jwt",
+		Type: "discord",
 		URL:    token,
 	}
 
@@ -337,7 +340,9 @@ func initLogging() {
 	}
 
 	logrus.SetFormatter(&logrus.JSONFormatter{})
-	logrus.SetOutput(logFile)
+	mw := io.MultiWriter(os.Stdout, logFile)
+	logrus.SetOutput(mw)
+	logrus.SetReportCaller(true)
 	logrus.SetLevel(logrus.InfoLevel)
 }
 
@@ -431,7 +436,7 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a JWT with the user information
-	token, _err := createJwt(userInfo)
+	jwtToken, _err := createJwt(userInfo)
 	if _err != nil {
 		logrus.Error("Error creating JWT:", err)
 		http.Error(w, "Error creating JWT", http.StatusInternalServerError)
@@ -441,7 +446,8 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Send the JWT to the client over the WebSocket
 	payload := Payload{
 		Action: "jwt",
-		URL:    token,
+		Type: "google",
+		URL:    jwtToken,
 	}
 
 	err = client.Conn.WriteJSON(payload)
