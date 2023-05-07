@@ -86,7 +86,7 @@ func main() {
 
 	router.HandleFunc("/auth/discord/{cid}", handleDiscordOAuth)
 	router.HandleFunc("/auth/google/{cid}", handleGoogleOAuth)
-	
+
 	router.HandleFunc("/success", handleSuccess)
 
 	router.HandleFunc("/health", handleHealth)
@@ -142,7 +142,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 				loginPayload := Payload{
 					Action: "login_url",
-					URL:    url,
+					Type: payload.Type,
+					URL:    fmt.Sprintf("%s%s", os.Getenv("URL_BASE"), url),
 				}
 
 				err = conn.WriteJSON(loginPayload)
