@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -163,6 +164,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func removeClient(clientToRemove *Client) {
 	for i, client := range clients {
 		if client == clientToRemove {
+			time.Sleep(5 * time.Second)
 			client.Conn.Close()
 			clients = append(clients[:i], clients[i+1:]...)
 			return
@@ -464,7 +466,7 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeClient(client)
+	go removeClient(client)
 
 	// Redirect the user to a success page
 	http.Redirect(w, r, "/success", http.StatusTemporaryRedirect)
