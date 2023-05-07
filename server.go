@@ -163,6 +163,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func removeClient(clientToRemove *Client) {
 	for i, client := range clients {
 		if client == clientToRemove {
+			client.Conn.Close()
 			clients = append(clients[:i], clients[i+1:]...)
 			return
 		}
