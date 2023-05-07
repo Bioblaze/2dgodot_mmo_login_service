@@ -79,13 +79,14 @@ func main() {
 	websocketRoute.Use(rateLimiterMiddleware)
 	websocketRoute.HandleFunc("/", handleWebSocket)
 
-
-	router.HandleFunc("/auth/discord/{cid}", handleDiscordOAuth)
-	router.HandleFunc("/auth/google/{cid}", handleGoogleOAuth)
-
 	router.HandleFunc("/auth/discord/callback", handleDiscordCallback)
 
 	router.HandleFunc("/auth/google/callback", handleGoogleCallback)
+
+
+	router.HandleFunc("/auth/discord/{cid}", handleDiscordOAuth)
+	router.HandleFunc("/auth/google/{cid}", handleGoogleOAuth)
+	
 	router.HandleFunc("/success", handleSuccess)
 
 	router.HandleFunc("/health", handleHealth)
