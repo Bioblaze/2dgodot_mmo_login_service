@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -47,7 +48,8 @@ type Provider struct {
 
 var clients []*Client
 
-var limiter *rate.Limiter
+var limiters = make(map[string]*rate.Limiter)
+var limitersMutex sync.Mutex
 
 var upgrader = websocket.Upgrader{}
 
@@ -67,14 +69,6 @@ func main() {
 	}
 
 	initLogging()
-
-	// Initialize the rate limiter (replace 10 and 1 with your desired requests per duration)
-	limiter = rate.NewLimiter(10, 1)
-    
-    logrus.WithFields(logrus.Fields{
-        "requests_per_second": 10,
-        "burst_size": 1,
-    }).Info("Rate limiter settings")
 
 	router := mux.NewRouter()
 
@@ -325,6 +319,17 @@ func handleSuccess(w http.ResponseWriter, r *http.Request) {
 
 func rateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+
+		limitersMutex.Lock()
+		limiter, exists := limiters[ip]
+		if !exists {
+			// Replace 50 and 5 with your desired requests per duration and burst size
+			limiter = rate.NewLimiter(50, 30)
+			limiters[ip] = limiter
+		}
+		limitersMutex.Unlock()
+
 		if !limiter.Allow() {
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
@@ -332,7 +337,6 @@ func rateLimiterMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
 func initLogging() {
 	logFile, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
