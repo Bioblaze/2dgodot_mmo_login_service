@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -163,6 +164,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func removeClient(clientToRemove *Client) {
 	for i, client := range clients {
 		if client == clientToRemove {
+			time.Sleep(10 * time.Second)
 			client.Conn.Close()
 			clients = append(clients[:i], clients[i+1:]...)
 			return
@@ -295,6 +297,8 @@ func exchangeCodeForToken(code string) (string, error) {
 func createJwt(claims *Claims) (string, error) {
 	// Get the required environment variables
 	jwtSecret := os.Getenv("JWT_SECRET")
+
+	fmt.Println("JWT Secret: ", jwtSecret)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(jwtSecret))
 }
