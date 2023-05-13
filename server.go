@@ -44,7 +44,7 @@ type Provider struct {
 	Platform string `json:"platform,omitempty"`
 	Id       string `json:"id,omitempty"`
 	Username string `json:"username,omitempty"`
-	Discriminator string `json:"disscriminator,omitempty"`
+	Discriminator string `json:"discriminator,omitempty"`
 	Avatar string `json:"avatar,omitempty"`
 	Email  string `json:"email,omitempty"`
 }
