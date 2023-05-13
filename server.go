@@ -41,12 +41,12 @@ type Claims struct {
 
 // Add a new struct for Provider
 type Provider struct {
-	Provider string
-	Id       string
-	Username string
-	Discriminator string
-	Avatar string
-	Email    string
+	Platform string `json:"platform,omitempty"`
+	Id       string `json:"id,omitempty"`
+	Username string `json:"username,omitempty"`
+	Discriminator string `json:"disscriminator,omitempty"`
+	Avatar string `json:"avatar,omitempty"`
+	Email  string `json:"email,omitempty"`
 }
 
 var clients []*Client
@@ -221,6 +221,8 @@ func handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error getting user info", http.StatusInternalServerError)
 		return
 	}
+
+	userInfo.Platform = "discord"
 
 	// Create a JWT with the user information
 	token, err := createJwt(userInfo)
