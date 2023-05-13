@@ -44,6 +44,8 @@ type Provider struct {
 	Provider string
 	Id       string
 	Username string
+	Discriminator string
+	Avatar string
 	Email    string
 }
 
