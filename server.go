@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,7 +17,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/oauth2"
 	"golang.org/x/time/rate"
 )
 
@@ -49,21 +47,14 @@ type Provider struct {
 	Email  string `json:"email,omitempty"`
 }
 
-var clients []*Client
 
-var limiters = make(map[string]*rate.Limiter)
-var limitersMutex sync.Mutex
+
+
+var clients sync.Map
+
+var limiters sync.Map
 
 var upgrader = websocket.Upgrader{}
-
-// Add environment variables for Google OAuth
-var googleOauthConfig = &oauth2.Config{
-	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-	RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URI"),
-	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"},
-	Endpoint:     oauth2.Endpoint{AuthURL: "https://accounts.google.com/o/oauth2/auth", TokenURL: "https://oauth2.googleapis.com/token"},
-}
 
 func main() {
 	err_ := godotenv.Load()
@@ -72,6 +63,19 @@ func main() {
 	}
 
 	initLogging()
+
+	bot := NewDiscordBot()
+	if err := bot.Launch(); err != nil {
+		fmt.Println("Error launching bot:", err)
+		return
+	}
+
+	bot.RegisterEventHandlers()
+
+	if err := bot.Connect(); err != nil {
+		fmt.Println("Error connecting bot:", err)
+		return
+	}
 
 	router := mux.NewRouter()
 
@@ -84,11 +88,8 @@ func main() {
 
 	router.HandleFunc("/auth/discord/callback", handleDiscordCallback)
 
-	router.HandleFunc("/auth/google/callback", handleGoogleCallback)
-
 
 	router.HandleFunc("/auth/discord/{cid}", handleDiscordOAuth)
-	router.HandleFunc("/auth/google/{cid}", handleGoogleOAuth)
 
 	router.HandleFunc("/success", handleSuccess)
 
@@ -115,7 +116,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Conn: conn,
 	}
 
-	clients = append(clients, client)
+	clients.Store(client.Id, client)
+
 
 	for {
 		var payload Payload
@@ -135,10 +137,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				switch(payload.Type) {
 				case "discord":
 					url = fmt.Sprintf("/auth/discord/%s", client.Id)
-				case "google":
-					url = fmt.Sprintf("/auth/google/%s", client.Id)
 				default:
-					logrus.Warn("Defaulting to Discord, Unknown type of getLogin: %s", payload.Type)
+					logrus.Warn("Defaulting to Discord, Unknown type of getLogin:", payload.Type)
 					url = fmt.Sprintf("/auth/discord/%s", client.Id)
 				}
 				
@@ -164,15 +164,18 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // Add a function to remove a client from the clients slice
 func removeClient(clientToRemove *Client) {
-	for i, client := range clients {
-		if client == clientToRemove {
-			time.Sleep(10 * time.Second)
-			client.Conn.Close()
-			clients = append(clients[:i], clients[i+1:]...)
-			return
-		}
-	}
+    // Assuming RemoteAddr() returns IP in format "ip:port", extracting IP
+    ip := strings.Split(clientToRemove.Conn.RemoteAddr().String(), ":")[0]
+    
+    // Remove the rate limiter for this IP
+    limiters.Delete(ip)
+
+    time.Sleep(3 * time.Second)
+    clientToRemove.Conn.Close()
+    clients.Delete(clientToRemove.Id)
 }
+
+
 
 // Handler for Discord OAuth login
 func handleDiscordOAuth(w http.ResponseWriter, r *http.Request) {
@@ -253,13 +256,13 @@ func handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func getClientByState(state string) *Client {
-	for _, c := range clients {
-		if c.Id == state {
-			return c
-		}
+	clientValue, ok := clients.Load(state)
+	if ok {
+		return clientValue.(*Client)
 	}
 	return nil
 }
+
 
 // Exchange the authorization code for an access token
 func exchangeCodeForToken(code string) (string, error) {
@@ -308,22 +311,7 @@ func createJwt(claims *Claims) (string, error) {
 }
 
 func handleSuccess(w http.ResponseWriter, r *http.Request) {
-	successHTML := `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>Success</title>
-	<script>
-		window.onload = function() {
-			window.close();
-		}
-	</script>
-</head>
-<body>
-	<p>Success! You may close this window.</p>
-</body>
-</html>
-`
+	successHTML := `<!DOCTYPE html><html><head><title>Success</title></head><body><p>Success! You may close this window.</p></body></html>`
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(successHTML))
 }
@@ -332,14 +320,14 @@ func rateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 
-		limitersMutex.Lock()
-		limiter, exists := limiters[ip]
-		if !exists {
-			// Replace 50 and 5 with your desired requests per duration and burst size
-			limiter = rate.NewLimiter(50, 30)
-			limiters[ip] = limiter
+		limiterInterface, ok := limiters.Load(ip)
+		if !ok {
+			limiter := rate.NewLimiter(50, 30)
+			limiters.Store(ip, limiter)
+			limiterInterface = limiter
 		}
-		limitersMutex.Unlock()
+
+		limiter := limiterInterface.(*rate.Limiter)
 
 		if !limiter.Allow() {
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
@@ -348,6 +336,7 @@ func rateLimiterMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
 func initLogging() {
 	logFile, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
@@ -359,18 +348,6 @@ func initLogging() {
 	logrus.SetOutput(mw)
 	logrus.SetReportCaller(true)
 	logrus.SetLevel(logrus.InfoLevel)
-}
-
-func handleGoogleOAuth(w http.ResponseWriter, r *http.Request) {
-	// Get the CID from the route variable
-	vars := mux.Vars(r)
-	cid := vars["cid"]
-
-	// Build the Google OAuth URL with the CID in the state parameter
-	oauthUrl := googleOauthConfig.AuthCodeURL(cid)
-
-	// Redirect the user to the Google OAuth URL
-	http.Redirect(w, r, oauthUrl, http.StatusTemporaryRedirect)
 }
 
 // Replace the getUserInfo function with a more generic one
@@ -415,67 +392,6 @@ func getUserInfo(provider string, accessToken string) (*Claims, error) {
 	}
 
 	return claims, nil
-}
-
-func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
-	// Get the authorization code from the query parameters
-	code := r.URL.Query().Get("code")
-
-	// Get the state from the query parameters
-	state := r.URL.Query().Get("state")
-
-	// Find the client that matches the state
-	client := getClientByState(state)
-
-	if client == nil {
-		logrus.Error("Error: Client not found for state:", state)
-		http.Error(w, "Client not found", http.StatusBadRequest)
-		return
-	}
-
-	// Exchange the authorization code for an access token
-    token, err := googleOauthConfig.Exchange(context.Background(), code)
-    if err != nil {
-        logrus.Error("Error exchanging code for token:", err)
-        http.Error(w, "Error exchanging code for token", http.StatusInternalServerError)
-        return
-    }
-    accessToken := token.AccessToken
-
-	// Get the user information using the access token
-	userInfo, err := getUserInfo("google", accessToken)
-	if err != nil {
-		logrus.Error("Error getting user info:", err)
-		http.Error(w, "Error getting user info", http.StatusInternalServerError)
-		return
-	}
-
-	// Create a JWT with the user information
-	jwtToken, _err := createJwt(userInfo)
-	if _err != nil {
-		logrus.Error("Error creating JWT:", err)
-		http.Error(w, "Error creating JWT", http.StatusInternalServerError)
-		return
-	}
-
-	// Send the JWT to the client over the WebSocket
-	payload := Payload{
-		Action: "jwt",
-		Type: "google",
-		URL:    jwtToken,
-	}
-
-	err = client.Conn.WriteJSON(payload)
-	if err != nil {
-		logrus.Error("Error sending JWT to client:", err)
-		http.Error(w, "Error sending JWT to client", http.StatusInternalServerError)
-		return
-	}
-
-	go removeClient(client)
-
-	// Redirect the user to a success page
-	http.Redirect(w, r, "/success", http.StatusTemporaryRedirect)
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
