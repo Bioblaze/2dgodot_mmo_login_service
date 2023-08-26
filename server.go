@@ -99,7 +99,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	logrus.Info("Client Connected")
 
 	client := &Client{
-		Id:   "",
+		Id:   uuid.New().String(),
 		Conn: conn,
 	}
 
@@ -117,7 +117,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		if !client.LoginStatus {
 			if payload.Action == "getLogin" {
-				client.Id = uuid.New().String()
 				client.LoginStatus = true
 				var url string
 
