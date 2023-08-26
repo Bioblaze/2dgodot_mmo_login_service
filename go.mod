@@ -3,6 +3,7 @@ module github.com/Bioblaze/2dgodot_mmo_login_service
 go 1.16
 
 require (
+	github.com/bwmarrin/discordgo v0.27.1 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
