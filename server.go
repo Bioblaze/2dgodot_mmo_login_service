@@ -64,19 +64,6 @@ func main() {
 
 	initLogging()
 
-	bot := NewDiscordBot()
-	if err := bot.Launch(); err != nil {
-		fmt.Println("Error launching bot:", err)
-		return
-	}
-
-	bot.RegisterEventHandlers()
-
-	if err := bot.Connect(); err != nil {
-		fmt.Println("Error connecting bot:", err)
-		return
-	}
-
 	router := mux.NewRouter()
 
 	// Apply the rate limiter middleware to the routes
@@ -170,7 +157,7 @@ func removeClient(clientToRemove *Client) {
     // Remove the rate limiter for this IP
     limiters.Delete(ip)
 
-    time.Sleep(3 * time.Second)
+    time.Sleep(15 * time.Second)
     clientToRemove.Conn.Close()
     clients.Delete(clientToRemove.Id)
 }
