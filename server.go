@@ -304,7 +304,7 @@ func handleSuccess(w http.ResponseWriter, r *http.Request) {
 
 func rateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		ip := strings.Split(r.RemoteAddr, ":")[0]
 
 		limiterInterface, ok := limiters.Load(ip)
 		if !ok {
